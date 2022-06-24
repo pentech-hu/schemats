@@ -9,7 +9,8 @@
     "strictNullChecks": true,
     "newLine": "LF",
     "sourceMap": true,
-    "typeRoots": ["./node_modules/@types"]
+    "typeRoots": ["./node_modules/@types"],
+    "outDir": "lib"
   },
   "include": ["src"],
   "exclude": ["dts", "test/actual", "test/expected", "test/fixture"]
