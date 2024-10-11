@@ -119,16 +119,27 @@ export class PostgresDatabase implements Database {
 
     public async getTableDefinition (tableName: string, tableSchema: string) {
         let tableDefinition: TableDefinition = {}
-        type T = { column_name: string, udt_name: string, is_nullable: string }
+        type T = { column_name: string, udt_name: string, is_nullable: boolean }
         await this.db.each<T>(
-            'SELECT column_name, udt_name, is_nullable ' +
-            'FROM information_schema.columns ' +
-            'WHERE table_name = $1 and table_schema = $2',
+            `
+            SELECT pg_attribute.attname AS column_name,
+                pg_type.typname::information_schema.sql_identifier AS udt_name,
+                pg_attribute.attnotnull AS is_nullable
+            FROM pg_attribute
+                JOIN pg_class on pg_attribute.attrelid = pg_class.oid
+                JOIN pg_namespace on pg_class.relnamespace = pg_namespace.oid
+                JOIN pg_type ON pg_type.oid = pg_attribute.atttypid
+            WHERE pg_attribute.attnum > 0
+                AND NOT pg_attribute.attisdropped
+                AND pg_class.relname = $1
+                AND pg_namespace.nspname = $2
+            ORDER BY pg_attribute.attnum;
+            `.split('\n').map(a => a.trim()).join(' '),
             [tableName, tableSchema],
             (schemaItem: T) => {
                 tableDefinition[schemaItem.column_name] = {
                     udtName: schemaItem.udt_name,
-                    nullable: schemaItem.is_nullable === 'YES'
+                    nullable: schemaItem.is_nullable === false
                 }
             })
         return tableDefinition
@@ -142,11 +153,13 @@ export class PostgresDatabase implements Database {
 
     public async getSchemaTables (schemaName: string): Promise<string[]> {
         return await this.db.map<string>(
-            'SELECT table_name ' +
-            'FROM information_schema.columns ' +
-            'WHERE table_schema = $1 ' +
-            'GROUP BY table_name ' +
-            'ORDER BY table_name',
+            'SELECT relname AS table_name ' +
+            'FROM pg_class ' +
+            'INNER JOIN pg_namespace ON pg_namespace.oid = pg_class.relnamespace ' +
+            'WHERE pg_namespace.nspname = $1 ' +
+            `AND relkind IN ('m', 'v', 'r') ` + // mat view, view, ordinary table
+            'GROUP BY relname ' +
+            'ORDER BY relname',
             [schemaName],
             (schemaItem: {table_name: string}) => schemaItem.table_name
         )
