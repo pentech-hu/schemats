@@ -122,19 +122,23 @@ export class PostgresDatabase implements Database {
         type T = { column_name: string, udt_name: string, is_nullable: boolean }
         await this.db.each<T>(
             `
-            SELECT pg_attribute.attname AS column_name,
+            SELECT
+                pg_attribute.attname AS column_name,
                 pg_type.typname::information_schema.sql_identifier AS udt_name,
                 pg_attribute.attnotnull AS is_nullable
-            FROM pg_attribute
-                JOIN pg_class on pg_attribute.attrelid = pg_class.oid
-                JOIN pg_namespace on pg_class.relnamespace = pg_namespace.oid
+            FROM
+                pg_attribute
+                JOIN pg_class ON pg_attribute.attrelid = pg_class.oid
+                JOIN pg_namespace ON pg_class.relnamespace = pg_namespace.oid
                 JOIN pg_type ON pg_type.oid = pg_attribute.atttypid
-            WHERE pg_attribute.attnum > 0
+            WHERE
+                pg_attribute.attnum > 0
                 AND NOT pg_attribute.attisdropped
                 AND pg_class.relname = $1
                 AND pg_namespace.nspname = $2
-            ORDER BY pg_attribute.attnum;
-            `.split('\n').map(a => a.trim()).join(' '),
+            ORDER BY
+                pg_attribute.attnum;
+            `.split('\n').map(line => line.trim()).join(' '),
             [tableName, tableSchema],
             (schemaItem: T) => {
                 tableDefinition[schemaItem.column_name] = {
